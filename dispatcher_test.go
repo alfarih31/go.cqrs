@@ -6,6 +6,7 @@
 package ycq
 
 import (
+	"context"
 	"fmt"
 
 	. "gopkg.in/check.v1"
@@ -33,7 +34,7 @@ func (s *InternalCommandBusSuite) TestShouldHandleCommand(c *C) {
 	c.Assert(err, IsNil)
 	cmd := NewSomeCommandMessage(NewUUID())
 
-	err = s.bus.Dispatch(cmd)
+	err = s.bus.Dispatch(context.TODO(), cmd)
 
 	c.Assert(err, IsNil)
 	c.Assert(s.stubhandler.command, Equals, cmd)
@@ -42,16 +43,16 @@ func (s *InternalCommandBusSuite) TestShouldHandleCommand(c *C) {
 func (s *InternalCommandBusSuite) TestShouldReturnErrorIfNoHandlerRegisteredForCommand(c *C) {
 	cmd := NewSomeCommandMessage(NewUUID())
 
-	err := s.bus.Dispatch(cmd)
+	err := s.bus.Dispatch(context.TODO(), cmd)
 
-	c.Assert(err, DeepEquals, fmt.Errorf("The command bus does not have a handler for commands of type: %s", cmd.CommandType()))
+	c.Assert(err, DeepEquals, fmt.Errorf("The command bus does not have a handler for commands of type: %s", cmd.CommandName()))
 	c.Assert(s.stubhandler.command, IsNil)
 }
 
 func (s *InternalCommandBusSuite) TestDuplicateHandlerRegistrationReturnsAnError(c *C) {
 	err := s.bus.RegisterHandler(s.stubhandler, &SomeCommand{}, &SomeCommand{})
 	c.Assert(err, DeepEquals, fmt.Errorf("Duplicate command handler registration with command bus for command of type: %s",
-		typeOf(&SomeCommand{"", 0})))
+		TypeOf(&SomeCommand{"", 0})))
 }
 
 func (s *InternalCommandBusSuite) TestCanRegisterMultipleCommandsForTheSameHandler(c *C) {

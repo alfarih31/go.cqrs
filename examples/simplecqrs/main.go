@@ -39,22 +39,33 @@ func init() {
 	// Register the listView as an event handler on the event bus
 	// for the events specified.
 	eventBus.AddHandler(listView,
-		&simplecqrs.InventoryItemCreated{},
-		&simplecqrs.InventoryItemRenamed{},
-		&simplecqrs.InventoryItemDeactivated{},
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.InventoryItemCreatedEvent)),
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.InventoryItemRenamedEvent)),
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.InventoryItemDeactivatedEvent)),
 	)
 	// Register the detail view as an event handler on the event bus
 	// for the events specified.
 	eventBus.AddHandler(detailView,
-		&simplecqrs.InventoryItemCreated{},
-		&simplecqrs.InventoryItemRenamed{},
-		&simplecqrs.InventoryItemDeactivated{},
-		&simplecqrs.ItemsRemovedFromInventory{},
-		&simplecqrs.ItemsCheckedIntoInventory{},
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.InventoryItemCreatedEvent)),
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.InventoryItemRenamedEvent)),
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.InventoryItemDeactivatedEvent)),
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.ItemsRemovedFromInventoryEvent)),
+		simplecqrs.NewInventoryEvent[any](nil, string(simplecqrs.ItemsCheckedIntoInventoryEvent)),
 	)
 
 	// Here we use an in memory event repository.
 	repo := simplecqrs.NewInMemoryRepo(eventBus)
+
+	// Here we use sql event repository
+	//eventRepo, err := ycq.NewSqlEventRepository(os.Getenv("DB_DRIVER"), os.Getenv("DB_DSN"), eventBus, true)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//
+	//repo, err := simplecqrs.NewInventoryItemSqlRepo(eventRepo, eventBus)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	// Here we use geteventstore with the go.geteventstore client
 	// https://github.com/jetbasrawi/go.geteventstore
@@ -122,7 +133,7 @@ func setupHandlers() *http.ServeMux {
 				Name: r.Form.Get("name"),
 			})
 
-			err = dispatcher.Dispatch(em)
+			err = dispatcher.Dispatch(r.Context(), em)
 			if err != nil {
 				log.Println(err)
 			}
@@ -154,7 +165,7 @@ func setupHandlers() *http.ServeMux {
 
 		if r.Method == http.MethodPost {
 			em := ycq.NewCommandMessage(id, &simplecqrs.DeactivateInventoryItem{OriginalVersion: 0})
-			err := dispatcher.Dispatch(em)
+			err := dispatcher.Dispatch(r.Context(), em)
 			if err != nil {
 				log.Println(err)
 			}
@@ -182,7 +193,7 @@ func setupHandlers() *http.ServeMux {
 			}
 
 			em := ycq.NewCommandMessage(id, &simplecqrs.RenameInventoryItem{NewName: r.Form.Get("name")})
-			err = dispatcher.Dispatch(em)
+			err = dispatcher.Dispatch(r.Context(), em)
 			if err != nil {
 				log.Println(err)
 			}
@@ -216,7 +227,7 @@ func setupHandlers() *http.ServeMux {
 			}
 
 			em := ycq.NewCommandMessage(id, &simplecqrs.CheckInItemsToInventory{Count: num})
-			err = dispatcher.Dispatch(em)
+			err = dispatcher.Dispatch(r.Context(), em)
 			if err != nil {
 				log.Println(err)
 			}
@@ -250,7 +261,7 @@ func setupHandlers() *http.ServeMux {
 			}
 
 			em := ycq.NewCommandMessage(id, &simplecqrs.RemoveItemsFromInventory{Count: num})
-			err = dispatcher.Dispatch(em)
+			err = dispatcher.Dispatch(r.Context(), em)
 			if err != nil {
 				log.Println(err)
 			}
@@ -279,4 +290,3 @@ func setupHandlers() *http.ServeMux {
 
 	return mux
 }
-

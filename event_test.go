@@ -6,6 +6,7 @@
 package ycq
 
 import (
+	"encoding/json"
 	"math/rand"
 
 	. "gopkg.in/check.v1"
@@ -17,12 +18,54 @@ type EventSuite struct {
 }
 
 type SomeEvent struct {
-	Item  string
-	Count int
+	Item  string `json:"item"`
+	Count int    `json:"count"`
+}
+
+func (s SomeEvent) Data() interface{} {
+	return s
+}
+
+func (s SomeEvent) Name() string {
+	return "SomeEvent"
+}
+
+func (s SomeEvent) Unmarshal(raw string) error {
+	return json.Unmarshal([]byte(raw), &s)
+}
+
+func (s SomeEvent) Marshal() (string, error) {
+	jb, err := json.Marshal(s.Data())
+	if err != nil {
+		return "", err
+	}
+
+	return string(jb), nil
 }
 
 type SomeOtherEvent struct {
-	OrderID string
+	OrderID string `json:"order_id"`
+}
+
+func (s SomeOtherEvent) Data() interface{} {
+	return s
+}
+
+func (s SomeOtherEvent) Name() string {
+	return "SomeOtherEvent"
+}
+
+func (s SomeOtherEvent) Unmarshal(raw string) error {
+	return json.Unmarshal([]byte(raw), &s)
+}
+
+func (s SomeOtherEvent) Marshal() (string, error) {
+	jb, err := json.Marshal(s.Data())
+	if err != nil {
+		return "", err
+	}
+
+	return string(jb), nil
 }
 
 func NewTestEventMessage(id string) *EventDescriptor {
@@ -44,7 +87,7 @@ func (s *EventSuite) TestNewEventMessage(c *C) {
 func (s *EventSuite) TestShouldGetTypeOfEvent(c *C) {
 	se := &SomeEvent{"Some String", 42}
 	em := &EventDescriptor{event: se}
-	c.Assert(em.EventType(), Equals, "SomeEvent")
+	c.Assert(em.Event().Name(), Equals, "SomeEvent")
 }
 
 //TODO: Do i need this still?

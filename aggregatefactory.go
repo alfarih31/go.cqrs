@@ -37,7 +37,7 @@ func NewDelegateAggregateFactory() *DelegateAggregateFactory {
 // 	func(id string) AggregateRoot {return NewMyAggregateType(id)}
 // 	func(id string) AggregateRoot { return &MyAggregateType{AggregateBase:NewAggregateBase(id)} }
 func (t *DelegateAggregateFactory) RegisterDelegate(aggregate AggregateRoot, delegate func(string) AggregateRoot) error {
-	typeName := typeOf(aggregate)
+	typeName := TypeOf(aggregate)
 	if _, ok := t.delegates[typeName]; ok {
 		return fmt.Errorf("Factory delegate already registered for type: \"%s\"", typeName)
 	}

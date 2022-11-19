@@ -53,7 +53,7 @@ func (s *CommandSuite) TestShouldGetTypeOfCommand(c *C) {
 	sc := &SomeCommand{"Some String", 42}
 	cm := &CommandDescriptor{command: sc}
 
-	typeString := cm.CommandType()
+	typeString := cm.CommandName()
 
 	c.Assert(typeString, Equals, "SomeCommand")
 }

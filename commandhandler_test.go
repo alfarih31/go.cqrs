@@ -6,6 +6,7 @@
 package ycq
 
 import (
+	"context"
 	. "gopkg.in/check.v1"
 )
 
@@ -18,7 +19,7 @@ type TestCommandHandler struct {
 	command CommandMessage
 }
 
-func (t *TestCommandHandler) Handle(command CommandMessage) error {
+func (t *TestCommandHandler) Handle(ctx context.Context, command CommandMessage) error {
 	t.command = command
 	return nil
 }

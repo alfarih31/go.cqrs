@@ -20,8 +20,8 @@ type CommandMessage interface {
 	// Command returns the actual command which is the payload of the command message.
 	Command() interface{}
 
-	// CommandType returns a string descriptor of the command name
-	CommandType() string
+	// CommandName returns a string descriptor of the command name
+	CommandName() string
 }
 
 // CommandDescriptor is an implementation of the command message interface.
@@ -40,9 +40,9 @@ func NewCommandMessage(aggregateID string, command interface{}) *CommandDescript
 	}
 }
 
-// CommandType returns the command type name as a string
-func (c *CommandDescriptor) CommandType() string {
-	return typeOf(c.command)
+// CommandName returns the command type name as a string
+func (c *CommandDescriptor) CommandName() string {
+	return TypeOf(c.command)
 }
 
 // AggregateID returns the ID of the aggregate that the command relates to.

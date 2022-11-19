@@ -20,19 +20,19 @@ import (
 // the contents of the persisted event which will typically be in some serialised
 // format such as JSON an instance of the event type will need to be created.
 type EventFactory interface {
-	GetEvent(string) interface{}
+	GetEvent(string) Event
 }
 
 // DelegateEventFactory uses delegate functions to instantiate event instances
 // given the name of the event type as a string.
 type DelegateEventFactory struct {
-	eventFactories map[string]func() interface{}
+	eventFactories map[string]func() Event
 }
 
 // NewDelegateEventFactory constructs a new DelegateEventFactory
 func NewDelegateEventFactory() *DelegateEventFactory {
 	return &DelegateEventFactory{
-		eventFactories: make(map[string]func() interface{}),
+		eventFactories: make(map[string]func() Event),
 	}
 }
 
@@ -41,12 +41,11 @@ func NewDelegateEventFactory() *DelegateEventFactory {
 //
 // If an attempt is made to register multiple delegates for an event type, an error
 // is returned.
-func (t *DelegateEventFactory) RegisterDelegate(event interface{}, delegate func() interface{}) error {
-	typeName := typeOf(event)
-	if _, ok := t.eventFactories[typeName]; ok {
-		return fmt.Errorf("Factory delegate already registered for type: \"%s\"", typeName)
+func (t *DelegateEventFactory) RegisterDelegate(eventName string, delegate func() Event) error {
+	if _, ok := t.eventFactories[eventName]; ok {
+		return fmt.Errorf("Factory delegate already registered for type: \"%s\"", eventName)
 	}
-	t.eventFactories[typeName] = delegate
+	t.eventFactories[eventName] = delegate
 	return nil
 }
 
@@ -54,7 +53,7 @@ func (t *DelegateEventFactory) RegisterDelegate(event interface{}, delegate func
 //
 // An appropriate delegate must be registered for the event type.
 // If an appropriate delegate is not registered, the method will return nil.
-func (t *DelegateEventFactory) GetEvent(typeName string) interface{} {
+func (t *DelegateEventFactory) GetEvent(typeName string) Event {
 	if f, ok := t.eventFactories[typeName]; ok {
 		return f()
 	}

@@ -11,10 +11,11 @@ type AggregateRoot interface {
 	OriginalVersion() int
 	CurrentVersion() int
 	IncrementVersion()
-	Apply(events EventMessage, isNew bool)
+	Apply(event EventMessage, isNew bool)
 	TrackChange(EventMessage)
 	GetChanges() []EventMessage
 	ClearChanges()
+	RebuildFromEvents(events []EventMessage)
 }
 
 // AggregateBase is a type that can be embedded in an AggregateRoot
@@ -34,7 +35,7 @@ func NewAggregateBase(id string) *AggregateBase {
 	return &AggregateBase{
 		id:      id,
 		changes: []EventMessage{},
-		version: -1,
+		version: 0,
 	}
 }
 

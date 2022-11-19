@@ -1,6 +1,7 @@
 package simplecqrs
 
 import (
+	"context"
 	"errors"
 	"log"
 
@@ -72,30 +73,20 @@ func NewInventoryListView() *InventoryListView {
 }
 
 // Handle processes events related to inventory and builds an in memory read model
-func (v *InventoryListView) Handle(message ycq.EventMessage) {
-
-	switch event := message.Event().(type) {
-
-	case *InventoryItemCreated:
+func (v *InventoryListView) Handle(ctx context.Context, message ycq.EventMessage) {
+	switch InventoryEventName(message.Event().Name()) {
+	case InventoryItemCreatedEvent:
+		d := message.Event().Data().(InventoryItemCreated)
 
 		bullShitDatabase.List = append(bullShitDatabase.List, &InventoryItemListDto{
-			ID:   message.AggregateID(),
-			Name: event.Name,
+			ID:   d.ID,
+			Name: d.Name,
 		})
-
-	case *InventoryItemRenamed:
-
-		for _, v := range bullShitDatabase.List {
-			if v.ID == message.AggregateID() {
-				v.Name = event.NewName
-				break
-			}
-		}
-
-	case *InventoryItemDeactivated:
+	case InventoryItemDeactivatedEvent:
+		d := message.Event().Data().(InventoryItemDeactivated)
 		i := -1
 		for k, v := range bullShitDatabase.List {
-			if v.ID == message.AggregateID() {
+			if v.ID == d.ID {
 				i = k
 				break
 			}
@@ -106,6 +97,14 @@ func (v *InventoryListView) Handle(message ycq.EventMessage) {
 				bullShitDatabase.List[:i],
 				bullShitDatabase.List[i+1:]...,
 			)
+		}
+	case InventoryItemRenamedEvent:
+		d := message.Event().Data().(InventoryItemRenamed)
+		for _, v := range bullShitDatabase.List {
+			if v.ID == d.ID {
+				v.Name = d.NewName
+				break
+			}
 		}
 	}
 }
@@ -125,47 +124,41 @@ func NewInventoryItemDetailView() *InventoryItemDetailView {
 }
 
 // Handle handles events and build the projection
-func (v *InventoryItemDetailView) Handle(message ycq.EventMessage) {
+func (v *InventoryItemDetailView) Handle(ctx context.Context, message ycq.EventMessage) {
 
-	switch event := message.Event().(type) {
-
-	case *InventoryItemCreated:
-
-		bullShitDatabase.Details[message.AggregateID()] = &InventoryItemDetailsDto{
-			ID:      message.AggregateID(),
-			Name:    event.Name,
+	switch InventoryEventName(message.Event().Name()) {
+	case InventoryItemCreatedEvent:
+		data := message.Event().Data().(InventoryItemCreated)
+		bullShitDatabase.Details[data.ID] = &InventoryItemDetailsDto{
+			ID:      data.ID,
+			Name:    data.Name,
 			Version: 0,
 		}
-
-	case *InventoryItemRenamed:
-
-		d, err := v.GetDetailsItem(message.AggregateID())
+	case InventoryItemDeactivatedEvent:
+		data := message.Event().Data().(InventoryItemDeactivated)
+		delete(bullShitDatabase.Details, data.ID)
+	case ItemsRemovedFromInventoryEvent:
+		data := message.Event().Data().(ItemsRemovedFromInventory)
+		d, err := v.GetDetailsItem(data.ID)
 		if err != nil {
 			log.Fatal(err)
 		}
-		d.Name = event.NewName
+		d.CurrentCount -= data.Count
+	case ItemsCheckedIntoInventoryEvent:
+		data := message.Event().Data().(ItemsCheckedIntoInventory)
+		d, err := v.GetDetailsItem(data.ID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		d.CurrentCount += data.Count
+	case InventoryItemRenamedEvent:
+		data := message.Event().Data().(InventoryItemRenamed)
+		d, err := v.GetDetailsItem(data.ID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		d.Name = data.NewName
 		d.Version = *message.Version()
-
-	case *ItemsRemovedFromInventory:
-
-		d, err := v.GetDetailsItem(message.AggregateID())
-		if err != nil {
-			log.Fatal(err)
-		}
-		d.CurrentCount -= event.Count
-
-	case *ItemsCheckedIntoInventory:
-
-		d, err := v.GetDetailsItem(message.AggregateID())
-		if err != nil {
-			log.Fatal(err)
-		}
-		d.CurrentCount += event.Count
-
-	case *InventoryItemDeactivated:
-
-		delete(bullShitDatabase.Details, message.AggregateID())
-
 	}
 }
 

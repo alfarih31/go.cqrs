@@ -6,6 +6,7 @@
 package ycq
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -23,7 +24,7 @@ import (
 //Commands contained in a CommandMessage envelope are passed to the Dispatcher via
 //the dispatch method.
 type Dispatcher interface {
-	Dispatch(CommandMessage) error
+	Dispatch(context.Context, CommandMessage) error
 	RegisterHandler(CommandHandler, ...interface{}) error
 }
 
@@ -41,18 +42,18 @@ func NewInMemoryDispatcher() *InMemoryDispatcher {
 }
 
 //Dispatch passes the CommandMessage on to all registered command handlers.
-func (b *InMemoryDispatcher) Dispatch(command CommandMessage) error {
-	if handler, ok := b.handlers[command.CommandType()]; ok {
-		return handler.Handle(command)
+func (b *InMemoryDispatcher) Dispatch(ctx context.Context, command CommandMessage) error {
+	if handler, ok := b.handlers[command.CommandName()]; ok {
+		return handler.Handle(ctx, command)
 	}
-	return fmt.Errorf("The command bus does not have a handler for commands of type: %s", command.CommandType())
+	return fmt.Errorf("The command bus does not have a handler for commands of type: %s", command.CommandName())
 }
 
 //RegisterHandler registers a command handler for the command types specified by the
 //variadic commands parameter.
 func (b *InMemoryDispatcher) RegisterHandler(handler CommandHandler, commands ...interface{}) error {
 	for _, command := range commands {
-		typeName := typeOf(command)
+		typeName := TypeOf(command)
 		if _, ok := b.handlers[typeName]; ok {
 			return fmt.Errorf("Duplicate command handler registration with command bus for command of type: %s", typeName)
 		}

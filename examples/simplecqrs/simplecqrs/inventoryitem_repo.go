@@ -1,6 +1,7 @@
 package simplecqrs
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -19,13 +20,13 @@ import (
 // type assertion is required. Here the type assertion is contained in this specialized
 // repo and a *InventoryItem is returned from the repo.
 type InventoryItemRepo struct {
-	repo *ycq.GetEventStoreCommonDomainRepo
+	repo ycq.DomainRepository
 }
 
 // NewInventoryItemRepo constructs a new InventoryItemRepository.
 func NewInventoryItemRepo(eventStore *goes.Client, eventBus ycq.EventBus) (*InventoryItemRepo, error) {
 
-	r, err := ycq.NewCommonDomainRepository(eventStore, eventBus)
+	r, err := ycq.NewEventStoreDomainRepository(eventStore, eventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -55,16 +56,21 @@ func NewInventoryItemRepo(eventStore *goes.Client, eventBus ycq.EventBus) (*Inve
 	// An event factory creates an instance of an event given the name of an event
 	// as a string.
 	eventFactory := ycq.NewDelegateEventFactory()
-	eventFactory.RegisterDelegate(&InventoryItemCreated{},
-		func() interface{} { return &InventoryItemCreated{} })
-	eventFactory.RegisterDelegate(&InventoryItemRenamed{},
-		func() interface{} { return &InventoryItemRenamed{} })
-	eventFactory.RegisterDelegate(&InventoryItemDeactivated{},
-		func() interface{} { return &InventoryItemDeactivated{} })
-	eventFactory.RegisterDelegate(&ItemsRemovedFromInventory{},
-		func() interface{} { return &ItemsRemovedFromInventory{} })
-	eventFactory.RegisterDelegate(&ItemsCheckedIntoInventory{},
-		func() interface{} { return &ItemsCheckedIntoInventory{} })
+	eventFactory.RegisterDelegate(string(InventoryItemCreatedEvent), func() ycq.Event {
+		return NewInventoryEvent[InventoryItemCreated](InventoryItemCreated{}, string(InventoryItemCreatedEvent))
+	})
+	eventFactory.RegisterDelegate(string(InventoryItemRenamedEvent), func() ycq.Event {
+		return NewInventoryEvent[InventoryItemRenamed](InventoryItemRenamed{}, string(InventoryItemRenamedEvent))
+	})
+	eventFactory.RegisterDelegate(string(InventoryItemDeactivatedEvent), func() ycq.Event {
+		return NewInventoryEvent[InventoryItemDeactivated](InventoryItemDeactivated{}, string(InventoryItemDeactivatedEvent))
+	})
+	eventFactory.RegisterDelegate(string(ItemsRemovedFromInventoryEvent), func() ycq.Event {
+		return NewInventoryEvent[ItemsRemovedFromInventory](ItemsRemovedFromInventory{}, string(ItemsRemovedFromInventoryEvent))
+	})
+	eventFactory.RegisterDelegate(string(ItemsCheckedIntoInventoryEvent), func() ycq.Event {
+		return NewInventoryEvent[ItemsCheckedIntoInventory](ItemsCheckedIntoInventory{}, string(ItemsCheckedIntoInventoryEvent))
+	})
 	ret.repo.SetEventFactory(eventFactory)
 
 	return ret, nil
@@ -73,8 +79,8 @@ func NewInventoryItemRepo(eventStore *goes.Client, eventBus ycq.EventBus) (*Inve
 // Load loads events for an aggregate.
 //
 // Returns an *InventoryAggregate.
-func (r *InventoryItemRepo) Load(aggregateType, id string) (*InventoryItem, error) {
-	ar, err := r.repo.Load(reflect.TypeOf(&InventoryItem{}).Elem().Name(), id)
+func (r *InventoryItemRepo) Load(ctx context.Context, aggregateType, id string) (*InventoryItem, error) {
+	ar, err := r.repo.Load(ctx, reflect.TypeOf(&InventoryItem{}).Elem().Name(), id)
 	if _, ok := err.(*ycq.ErrAggregateNotFound); ok {
 		return nil, nil
 	}
@@ -90,6 +96,6 @@ func (r *InventoryItemRepo) Load(aggregateType, id string) (*InventoryItem, erro
 }
 
 // Save persists an aggregate.
-func (r *InventoryItemRepo) Save(aggregate ycq.AggregateRoot, expectedVersion *int) error {
-	return r.repo.Save(aggregate, expectedVersion)
+func (r *InventoryItemRepo) Save(ctx context.Context, aggregate ycq.AggregateRoot, expectedVersion *int) error {
+	return r.repo.Save(ctx, aggregate, expectedVersion)
 }

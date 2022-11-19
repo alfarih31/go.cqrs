@@ -2,7 +2,6 @@ package simplecqrs
 
 import (
 	"errors"
-
 	"github.com/jetbasrawi/go.cqrs"
 )
 
@@ -12,6 +11,8 @@ type InventoryItem struct {
 	activated bool
 	count     int
 }
+
+var _ ycq.AggregateRoot = new(InventoryItem)
 
 // NewInventoryItem constructs a new inventory item aggregate.
 //
@@ -31,7 +32,7 @@ func (a *InventoryItem) Create(name string) error {
 	}
 
 	a.Apply(ycq.NewEventMessage(a.AggregateID(),
-		&InventoryItemCreated{ID: a.AggregateID(), Name: name},
+		NewInventoryEvent[InventoryItemCreated](InventoryItemCreated{ID: a.AggregateID(), Name: name}, "InventoryItemCreated"),
 		ycq.Int(a.CurrentVersion())), true)
 
 	return nil
@@ -44,7 +45,7 @@ func (a *InventoryItem) ChangeName(newName string) error {
 	}
 
 	a.Apply(ycq.NewEventMessage(a.AggregateID(),
-		&InventoryItemRenamed{ID: a.AggregateID(), NewName: newName},
+		NewInventoryEvent[InventoryItemRenamed](InventoryItemRenamed{ID: a.AggregateID(), NewName: newName}, "InventoryItemRenamed"),
 		ycq.Int(a.CurrentVersion())), true)
 
 	return nil
@@ -61,7 +62,7 @@ func (a *InventoryItem) Remove(count int) error {
 	}
 
 	a.Apply(ycq.NewEventMessage(a.AggregateID(),
-		&ItemsRemovedFromInventory{ID: a.AggregateID(), Count: count},
+		NewInventoryEvent[ItemsRemovedFromInventory](ItemsRemovedFromInventory{ID: a.AggregateID(), Count: count}, "ItemsRemovedFromInventory"),
 		ycq.Int(a.CurrentVersion())), true)
 
 	return nil
@@ -74,7 +75,7 @@ func (a *InventoryItem) CheckIn(count int) error {
 	}
 
 	a.Apply(ycq.NewEventMessage(a.AggregateID(),
-		&ItemsCheckedIntoInventory{ID: a.AggregateID(), Count: count},
+		NewInventoryEvent[ItemsCheckedIntoInventory](ItemsCheckedIntoInventory{ID: a.AggregateID(), Count: count}, "ItemsCheckedIntoInventory"),
 		ycq.Int(a.CurrentVersion())), true)
 
 	return nil
@@ -87,7 +88,7 @@ func (a *InventoryItem) Deactivate() error {
 	}
 
 	a.Apply(ycq.NewEventMessage(a.AggregateID(),
-		&InventoryItemDeactivated{ID: a.AggregateID()},
+		NewInventoryEvent[InventoryItemDeactivated](InventoryItemDeactivated{ID: a.AggregateID()}, "InventoryItemDeactivated"),
 		ycq.Int(a.CurrentVersion())), true)
 
 	return nil
@@ -99,20 +100,23 @@ func (a *InventoryItem) Apply(message ycq.EventMessage, isNew bool) {
 		a.TrackChange(message)
 	}
 
-	switch ev := message.Event().(type) {
-
-	case *InventoryItemCreated:
+	switch InventoryEventName(message.Event().Name()) {
+	case InventoryItemCreatedEvent:
 		a.activated = true
-
-	case *InventoryItemDeactivated:
+	case InventoryItemDeactivatedEvent:
 		a.activated = false
-
-	case *ItemsRemovedFromInventory:
-		a.count -= ev.Count
-
-	case *ItemsCheckedIntoInventory:
-		a.count += ev.Count
-
+	case ItemsRemovedFromInventoryEvent:
+		d := message.Event().Data().(ItemsRemovedFromInventory)
+		a.count -= d.Count
+	case ItemsCheckedIntoInventoryEvent:
+		d := message.Event().Data().(ItemsCheckedIntoInventory)
+		a.count += d.Count
 	}
+}
 
+func (a *InventoryItem) RebuildFromEvents(events []ycq.EventMessage) {
+	for _, e := range events {
+		a.Apply(e, false)
+		a.IncrementVersion()
+	}
 }

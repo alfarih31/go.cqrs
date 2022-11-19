@@ -10,7 +10,7 @@ type ErrCommandExecution struct {
 
 // Error fulfills the error interface.
 func (e *ErrCommandExecution) Error() string {
-	return fmt.Sprintf("Invalid Operation. Command: %s Reason: %s", e.Command.CommandType(), e.Reason)
+	return fmt.Sprintf("Invalid Operation. Command: %s Reason: %s", e.Command.CommandName(), e.Reason)
 }
 
 // ErrConcurrencyViolation is returned when a concurrency error is raised by the event store
@@ -63,4 +63,24 @@ func (e *ErrAggregateNotFound) Error() string {
 	return fmt.Sprintf("Could not find any aggregate of type %s with id %s",
 		e.AggregateType,
 		e.AggregateID)
+}
+
+// ErrRepositoryExecution is the error returned in response to a failed repository action.
+type ErrRepositoryExecution struct {
+	Err error
+}
+
+// Error fulfills the error interface.
+func (e *ErrRepositoryExecution) Error() string {
+	return fmt.Sprintf("Repository action failed. %s", e.Err)
+}
+
+// ErrEventNotFound error returned when an aggregate was not found in the repository.
+type ErrEventNotFound struct {
+	EventName string
+}
+
+func (e *ErrEventNotFound) Error() string {
+	return fmt.Sprintf("Could not find any event of name %s",
+		e.EventName)
 }

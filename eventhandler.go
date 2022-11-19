@@ -5,6 +5,8 @@
 
 package ycq
 
+import "context"
+
 type EventHandler interface {
-	Handle(EventMessage)
+	Handle(context.Context, EventMessage)
 }

@@ -27,36 +27,36 @@ func (s *DelegateEventFactorySuite) TestNewEventFactory(c *C) {
 }
 
 func (s *DelegateEventFactorySuite) TestCanRegisterEventFactoryDelegate(c *C) {
-	err := s.factory.RegisterDelegate(&SomeEvent{},
-		func() interface{} { return &SomeEvent{} })
+	err := s.factory.RegisterDelegate("SomeEvent",
+		func() Event { return &SomeEvent{} })
 
 	c.Assert(err, IsNil)
 
-	c.Assert(s.factory.eventFactories[typeOf(&SomeEvent{})](),
+	c.Assert(s.factory.eventFactories[TypeOf(&SomeEvent{})](),
 		DeepEquals,
 		&SomeEvent{})
 }
 
 func (s *DelegateEventFactorySuite) TestDuplicateEventFactoryRegistrationReturnsAnError(c *C) {
-	err := s.factory.RegisterDelegate(&SomeEvent{},
-		func() interface{} { return &SomeEvent{} })
+	err := s.factory.RegisterDelegate("SomeEvent",
+		func() Event { return &SomeEvent{} })
 
 	c.Assert(err, IsNil)
 
-	err = s.factory.RegisterDelegate(&SomeEvent{},
-		func() interface{} { return &SomeEvent{} })
+	err = s.factory.RegisterDelegate("SomeEvent",
+		func() Event { return &SomeEvent{} })
 
 	c.Assert(err, NotNil)
 	c.Assert(err,
 		DeepEquals,
 		fmt.Errorf("Factory delegate already registered for type: \"%s\"",
-			typeOf(&SomeEvent{})))
+			TypeOf(&SomeEvent{})))
 }
 
 func (s *DelegateEventFactorySuite) TestCanGetEventInstanceFromString(c *C) {
-	_ = s.factory.RegisterDelegate(&SomeEvent{},
-		func() interface{} { return &SomeEvent{} })
+	_ = s.factory.RegisterDelegate("SomeEvent",
+		func() Event { return &SomeEvent{} })
 
-	ev := s.factory.GetEvent(typeOf(&SomeEvent{}))
+	ev := s.factory.GetEvent(TypeOf(&SomeEvent{}))
 	c.Assert(ev, DeepEquals, &SomeEvent{})
 }

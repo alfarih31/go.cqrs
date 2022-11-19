@@ -20,12 +20,12 @@ import (
 	"github.com/jetbasrawi/go.cqrs/internal/uuid"
 )
 
-// typeOf is a convenience function that returns the name of a type
+// TypeOf is a convenience function that returns the name of a type
 //
 // This is used so commonly throughout the code that it is better to
 // have this convenience function and also allows for changing the scheme
 // used for the type name more easily if desired.
-func typeOf(i interface{}) string {
+func TypeOf(i interface{}) string {
 	return reflect.TypeOf(i).Elem().Name()
 }
 

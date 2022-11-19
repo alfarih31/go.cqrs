@@ -6,6 +6,7 @@
 package ycq
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 
@@ -14,61 +15,87 @@ import (
 
 // DomainRepository is the interface that all domain repositories should implement.
 type DomainRepository interface {
-	//Loads an aggregate of the given type and ID
-	Load(aggregateTypeName string, aggregateID string) (AggregateRoot, error)
+	//Load an aggregate of the given type and ID
+	Load(ctx context.Context, aggregateTypeName string, aggregateID string) (AggregateRoot, error)
 
-	//Saves the aggregate.
-	Save(aggregate AggregateRoot, expectedVersion *int) error
+	//Save the aggregate.
+	Save(ctx context.Context, aggregate AggregateRoot, expectedVersion *int) error
+
+	SetAggregateFactory(factory AggregateFactory)
+
+	SetEventFactory(factory EventFactory)
+
+	SetStreamNameDelegate(delegate StreamNamer)
 }
 
-// GetEventStoreCommonDomainRepo is an implementation of the DomainRepository
-// that uses GetEventStore for persistence
-type GetEventStoreCommonDomainRepo struct {
-	eventStore         *goes.Client
+type DomainRepositoryBase struct {
 	eventBus           EventBus
 	streamNameDelegate StreamNamer
 	aggregateFactory   AggregateFactory
 	eventFactory       EventFactory
 }
 
-// NewCommonDomainRepository constructs a new CommonDomainRepository
-func NewCommonDomainRepository(eventStore *goes.Client, eventBus EventBus) (*GetEventStoreCommonDomainRepo, error) {
-	if eventStore == nil {
-		return nil, fmt.Errorf("Nil Eventstore injected into repository.")
+func (d *DomainRepositoryBase) SetAggregateFactory(factory AggregateFactory) {
+	d.aggregateFactory = factory
+}
+
+func (d *DomainRepositoryBase) SetEventFactory(factory EventFactory) {
+	d.eventFactory = factory
+}
+
+func (d *DomainRepositoryBase) SetStreamNameDelegate(delegate StreamNamer) {
+	d.streamNameDelegate = delegate
+}
+
+func (d *DomainRepositoryBase) ValidateDependencies() error {
+	if d.aggregateFactory == nil {
+		return fmt.Errorf("the domain repository has no Aggregate Factory")
 	}
 
+	if d.streamNameDelegate == nil {
+		return fmt.Errorf("the domain repository has no stream name delegate")
+	}
+
+	if d.eventFactory == nil {
+		return fmt.Errorf("the domain has no Event Factory")
+	}
+
+	return nil
+}
+
+func NewDomainRepositoryBase(eventBus EventBus) (*DomainRepositoryBase, error) {
 	if eventBus == nil {
-		return nil, fmt.Errorf("Nil EventBus injected into repository.")
+		return nil, fmt.Errorf("nil EventBus injected into repository")
 	}
 
-	d := &GetEventStoreCommonDomainRepo{
-		eventStore: eventStore,
-		eventBus:   eventBus,
+	return &DomainRepositoryBase{
+		eventBus: eventBus,
+	}, nil
+}
+
+// EventStoreDomainRepo is an implementation of the DomainRepository
+// that uses GetEventStore for persistence
+type EventStoreDomainRepo struct {
+	*DomainRepositoryBase
+	eventStore *goes.Client
+}
+
+// NewEventStoreDomainRepository constructs a new DomainRepository
+func NewEventStoreDomainRepository(eventStore *goes.Client, eventBus EventBus) (*EventStoreDomainRepo, error) {
+	if eventStore == nil {
+		return nil, fmt.Errorf("nil Eventstore injected into repository")
+	}
+
+	base, err := NewDomainRepositoryBase(eventBus)
+	if err != nil {
+		return nil, err
+	}
+
+	d := &EventStoreDomainRepo{
+		DomainRepositoryBase: base,
+		eventStore:           eventStore,
 	}
 	return d, nil
-}
-
-// SetAggregateFactory sets the aggregate factory that should be used to
-// instantate aggregate instances
-//
-// Only one AggregateFactory can be registered at any one time.
-// Any registration will overwrite the provious registration.
-func (r *GetEventStoreCommonDomainRepo) SetAggregateFactory(factory AggregateFactory) {
-	r.aggregateFactory = factory
-}
-
-// SetEventFactory sets the event factory that should be used to instantiate event
-// instances.
-//
-// Only one event factory can be set at a time. Any subsequent registration will
-// overwrite the previous factory.
-func (r *GetEventStoreCommonDomainRepo) SetEventFactory(factory EventFactory) {
-	r.eventFactory = factory
-}
-
-// SetStreamNameDelegate sets the stream name delegate
-func (r *GetEventStoreCommonDomainRepo) SetStreamNameDelegate(delegate StreamNamer) {
-	r.streamNameDelegate = delegate
 }
 
 // Load will load all events from a stream and apply those events to an aggregate
@@ -76,26 +103,17 @@ func (r *GetEventStoreCommonDomainRepo) SetStreamNameDelegate(delegate StreamNam
 //
 // The aggregate type and id will be passed to the configured StreamNamer to
 // get the stream name.
-func (r *GetEventStoreCommonDomainRepo) Load(aggregateType, id string) (AggregateRoot, error) {
-
-	if r.aggregateFactory == nil {
-		return nil, fmt.Errorf("The common domain repository has no Aggregate Factory.")
+func (r *EventStoreDomainRepo) Load(ctx context.Context, aggregateTypeName, aggregateId string) (AggregateRoot, error) {
+	if err := r.ValidateDependencies(); err != nil {
+		return nil, err
 	}
 
-	if r.streamNameDelegate == nil {
-		return nil, fmt.Errorf("The common domain repository has no stream name delegate.")
-	}
-
-	if r.eventFactory == nil {
-		return nil, fmt.Errorf("The common domain has no Event Factory.")
-	}
-
-	aggregate := r.aggregateFactory.GetAggregate(aggregateType, id)
+	aggregate := r.aggregateFactory.GetAggregate(aggregateTypeName, aggregateId)
 	if aggregate == nil {
-		return nil, fmt.Errorf("The repository has no aggregate factory registered for aggregate type: %s", aggregateType)
+		return nil, fmt.Errorf("the repository has no aggregate factory registered for aggregate type: %s", aggregateTypeName)
 	}
 
-	streamName, err := r.streamNameDelegate.GetStreamName(aggregateType, id)
+	streamName, err := r.streamNameDelegate.GetStreamName(aggregateTypeName, aggregateId)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +130,7 @@ func (r *GetEventStoreCommonDomainRepo) Load(aggregateType, id string) (Aggregat
 		case *goes.ErrUnauthorized:
 			return nil, &ErrUnauthorized{}
 		case *goes.ErrNotFound:
-			return nil, &ErrAggregateNotFound{AggregateType: aggregateType, AggregateID: id}
+			return nil, &ErrAggregateNotFound{AggregateID: aggregateId}
 		default:
 			return nil, &ErrUnexpected{Err: err}
 		}
@@ -125,7 +143,7 @@ func (r *GetEventStoreCommonDomainRepo) Load(aggregateType, id string) (Aggregat
 		if stream.Err() != nil {
 			return nil, stream.Err()
 		}
-		em := NewEventMessage(id, event, Int(stream.EventResponse().Event.EventNumber))
+		em := NewEventMessage(aggregateId, event, Int(stream.EventResponse().Event.EventNumber))
 		for k, v := range meta {
 			em.SetHeader(k, v)
 		}
@@ -138,15 +156,14 @@ func (r *GetEventStoreCommonDomainRepo) Load(aggregateType, id string) (Aggregat
 }
 
 // Save persists an aggregate
-func (r *GetEventStoreCommonDomainRepo) Save(aggregate AggregateRoot, expectedVersion *int) error {
-
+func (r *EventStoreDomainRepo) Save(ctx context.Context, aggregate AggregateRoot, expectedVersion *int) error {
 	if r.streamNameDelegate == nil {
-		return fmt.Errorf("The common domain repository has no stream name delagate.")
+		return fmt.Errorf("the domain repository has no stream name delegate")
 	}
 
 	resultEvents := aggregate.GetChanges()
 
-	streamName, err := r.streamNameDelegate.GetStreamName(typeOf(aggregate), aggregate.AggregateID())
+	streamName, err := r.streamNameDelegate.GetStreamName(TypeOf(aggregate), aggregate.AggregateID())
 	if err != nil {
 		return err
 	}
@@ -158,7 +175,7 @@ func (r *GetEventStoreCommonDomainRepo) Save(aggregate AggregateRoot, expectedVe
 		for k, v := range resultEvents {
 			//TODO: There is no test for this code
 			v.SetHeader("AggregateID", aggregate.AggregateID())
-			evs[k] = goes.NewEvent("", v.EventType(), v.Event(), v.GetHeaders())
+			evs[k] = goes.NewEvent("", v.Event().Name(), v.Event(), v.GetHeaders())
 		}
 
 		streamWriter := r.eventStore.NewStreamWriter(streamName)

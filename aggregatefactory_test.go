@@ -33,7 +33,7 @@ func (s *DelegateAggregateFactorySuite) TestCanRegisterAggregateFactoryDelegate(
 	c.Assert(err, IsNil)
 
 	id := NewUUID()
-	c.Assert(s.factory.delegates[typeOf(&SomeAggregate{})](id),
+	c.Assert(s.factory.delegates[TypeOf(&SomeAggregate{})](id),
 		DeepEquals,
 		NewSomeAggregate(id))
 }
@@ -51,7 +51,7 @@ func (s *DelegateAggregateFactorySuite) TestDuplicateAggregateFactoryRegistratio
 	c.Assert(err,
 		DeepEquals,
 		fmt.Errorf("Factory delegate already registered for type: \"%s\"",
-			typeOf(&SomeAggregate{})))
+			TypeOf(&SomeAggregate{})))
 }
 
 func (s *DelegateAggregateFactorySuite) TestCanGetAggregateInstanceFromString(c *C) {
@@ -59,6 +59,6 @@ func (s *DelegateAggregateFactorySuite) TestCanGetAggregateInstanceFromString(c 
 		func(id string) AggregateRoot { return NewSomeAggregate(id) })
 
 	id := NewUUID()
-	ev := s.factory.GetAggregate(typeOf(&SomeAggregate{}), id)
+	ev := s.factory.GetAggregate(TypeOf(&SomeAggregate{}), id)
 	c.Assert(ev, DeepEquals, NewSomeAggregate(id))
 }

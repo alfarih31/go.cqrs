@@ -18,16 +18,16 @@ func (s *AggregateBaseSuite) TestNewAggregateBase(c *C) {
 
 	c.Assert(agg, NotNil)
 	c.Assert(agg.AggregateID(), Equals, id)
-	c.Assert(agg.OriginalVersion(), Equals, -1)
-	c.Assert(agg.CurrentVersion(), Equals, -1)
+	c.Assert(agg.OriginalVersion(), Equals, 0)
+	c.Assert(agg.CurrentVersion(), Equals, 0)
 }
 
 func (s *AggregateBaseSuite) TestIncrementVersion(c *C) {
 	agg := NewAggregateBase(NewUUID())
-	c.Assert(agg.CurrentVersion(), Equals, -1)
+	c.Assert(agg.CurrentVersion(), Equals, 0)
 
 	agg.IncrementVersion()
-	c.Assert(agg.CurrentVersion(), Equals, 0)
+	c.Assert(agg.CurrentVersion(), Equals, 1)
 }
 
 func (s *AggregateBaseSuite) TestTrackOneChange(c *C) {
@@ -66,6 +66,11 @@ type SomeAggregate struct {
 	events []EventMessage
 }
 
+func (t *SomeAggregate) RebuildFromEvents(events []EventMessage) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewSomeAggregate(id string) AggregateRoot {
 	return &SomeAggregate{
 		AggregateBase: NewAggregateBase(id),
@@ -83,6 +88,11 @@ func (t *SomeAggregate) Handle(command CommandMessage) error {
 type SomeOtherAggregate struct {
 	*AggregateBase
 	changes []EventMessage
+}
+
+func (t *SomeOtherAggregate) RebuildFromEvents(events []EventMessage) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func NewSomeOtherAggregate(id string) AggregateRoot {

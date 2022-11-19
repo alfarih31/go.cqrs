@@ -5,6 +5,8 @@
 
 package ycq
 
+import "context"
+
 func NewMockEventHandler() *MockEventHandler {
 	return &MockEventHandler{
 		make([]EventMessage, 0),
@@ -15,6 +17,6 @@ type MockEventHandler struct {
 	events []EventMessage
 }
 
-func (m *MockEventHandler) Handle(event EventMessage) {
+func (m *MockEventHandler) Handle(ctx context.Context, event EventMessage) {
 	m.events = append(m.events, event)
 }

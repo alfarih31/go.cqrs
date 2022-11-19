@@ -1,6 +1,7 @@
 package simplecqrs
 
 import (
+	"context"
 	"github.com/jetbasrawi/go.cqrs"
 )
 
@@ -19,7 +20,7 @@ func NewInMemoryRepo(eventBus ycq.EventBus) *InMemoryRepo {
 }
 
 // Load loads an aggregate of the specified type.
-func (r *InMemoryRepo) Load(aggregateType, id string) (*InventoryItem, error) {
+func (r *InMemoryRepo) Load(ctx context.Context, aggregateType, id string) (*InventoryItem, error) {
 
 	events, ok := r.current[id]
 	if !ok {
@@ -37,7 +38,7 @@ func (r *InMemoryRepo) Load(aggregateType, id string) (*InventoryItem, error) {
 }
 
 // Save persists an aggregate.
-func (r *InMemoryRepo) Save(aggregate ycq.AggregateRoot, _ *int) error {
+func (r *InMemoryRepo) Save(ctx context.Context, aggregate ycq.AggregateRoot, _ *int) error {
 
 	//TODO: Look at the expected version
 	for _, v := range aggregate.GetChanges() {

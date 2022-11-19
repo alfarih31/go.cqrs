@@ -5,6 +5,13 @@
 
 package ycq
 
+type Event interface {
+	Data() interface{}
+	Name() string
+	Unmarshal(rawString string) error
+	Marshal() (string, error)
+}
+
 // EventMessage is the interface that a command must implement.
 type EventMessage interface {
 
@@ -21,36 +28,51 @@ type EventMessage interface {
 	SetHeader(string, interface{})
 
 	// Returns the actual event which is the payload of the event message.
-	Event() interface{}
-
-	// EventType returns a string descriptor of the command name
-	EventType() string
+	Event() Event
 
 	// Version returns the version of the event
 	Version() *int
 }
 
+var _ Event = new(RawEvent)
+
+type RawEvent struct {
+	name string
+	data interface{}
+}
+
+func (r *RawEvent) Name() string {
+	return r.name
+}
+
+func (r *RawEvent) Unmarshal(rawString string) error {
+	panic("implement me")
+}
+
+func (r *RawEvent) Marshal() (string, error) {
+	panic("implement me")
+}
+
+func (r *RawEvent) Data() interface{} {
+	return r.data
+}
+
 // EventDescriptor is an implementation of the event message interface.
 type EventDescriptor struct {
 	id      string
-	event   interface{}
+	event   Event
 	headers map[string]interface{}
 	version *int
 }
 
 // NewEventMessage returns a new event descriptor
-func NewEventMessage(aggregateID string, event interface{}, version *int) *EventDescriptor {
+func NewEventMessage(aggregateID string, event Event, version *int) *EventDescriptor {
 	return &EventDescriptor{
 		id:      aggregateID,
 		event:   event,
 		headers: make(map[string]interface{}),
 		version: version,
 	}
-}
-
-// EventType returns the name of the event type as a string.
-func (c *EventDescriptor) EventType() string {
-	return typeOf(c.event)
 }
 
 // AggregateID returns the ID of the Aggregate that the event relates to.
@@ -69,7 +91,7 @@ func (c *EventDescriptor) SetHeader(key string, value interface{}) {
 }
 
 // Event the event payload of the event message
-func (c *EventDescriptor) Event() interface{} {
+func (c *EventDescriptor) Event() Event {
 	return c.event
 }
 
