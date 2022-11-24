@@ -88,18 +88,6 @@ func (s *ComDomRepoSuite) SetupDefaultRepo(client *goes.Client) {
 
 	s.repo, _ = NewEventStoreDomainRepository(client, s.eventBus)
 
-	aggregateFactory := NewDelegateAggregateFactory()
-	aggregateFactory.RegisterDelegate(&SomeAggregate{},
-		func(id string) AggregateRoot { return NewSomeAggregate(id) })
-	s.repo.SetAggregateFactory(aggregateFactory)
-
-	streamNameDelegate := NewDelegateStreamNamer()
-	streamNameDelegate.RegisterDelegate(func(at string, id string) string { return at + "-" + id },
-		&SomeAggregate{},
-		&SomeOtherAggregate{},
-		&StubAggregate{})
-	s.repo.SetStreamNameDelegate(streamNameDelegate)
-
 	eventFactory := NewDelegateEventFactory()
 	eventFactory.RegisterDelegate("SomeEvent",
 		func() Event { return &SomeEvent{} })
@@ -116,8 +104,6 @@ func (s *ComDomRepoSuite) TestCanConstructNewRepository(c *C) {
 
 	c.Assert(repo, NotNil)
 	c.Assert(err, IsNil)
-	c.Assert(repo.aggregateFactory, IsNil)
-	c.Assert(repo.streamNameDelegate, IsNil)
 	c.Assert(repo.eventBus, NotNil)
 }
 
@@ -142,17 +128,13 @@ func (s *ComDomRepoSuite) TestRepositoryCanLoadAggregateWithEvents(c *C) {
 	s.SetupDefaultSimulator()
 
 	id := NewUUID()
-	aggregateFactory := NewDelegateAggregateFactory()
-	aggregateFactory.RegisterDelegate(&StubAggregate{},
-		func(id string) AggregateRoot { return NewStubAggregate(id) })
-	s.repo.SetAggregateFactory(aggregateFactory)
-
-	got, err := s.repo.Load(context.Background(), TypeOf(&StubAggregate{}), id)
+	got := NewStubAggregate(id)
+	err := s.repo.Load(context.Background(), "StubAggregate", got)
 
 	c.Assert(err, IsNil)
 	c.Assert(got.AggregateID(), Equals, id)
 
-	events := got.(*StubAggregate).events
+	events := got.events
 
 	c.Assert(events[0].Event(), DeepEquals, s.someEvent)
 	c.Assert(events[1].Event(), DeepEquals, s.someOtherEvent)
@@ -167,7 +149,8 @@ func (s *ComDomRepoSuite) TestRepositoryIncrementsAggregateVersionForEachEvent(c
 	s.SetupSimulator(es, nil)
 
 	id := NewUUID()
-	got, err := s.repo.Load(context.Background(), TypeOf(&SomeAggregate{}), id)
+	got := NewSomeAggregate(id)
+	err := s.repo.Load(context.Background(), "SomeAggregate", got)
 	c.Assert(err, IsNil)
 
 	// Version is a zero based index. The first item is zero
@@ -201,135 +184,13 @@ func (s *ComDomRepoSuite) TestSaveAggregateWithUncommittedChanges(c *C) {
 	id := NewUUID()
 	agg := NewSomeAggregate(id)
 
-	em := NewEventMessage(id, someEvent, nil)
+	em := NewEventMessage(&id, someEvent, nil)
 	agg.TrackChange(em)
 
-	err := s.repo.Save(context.Background(), agg, nil)
+	err := s.repo.Save(context.Background(), "SomeAggregate", agg, nil)
 
 	c.Assert(err, IsNil)
 
-}
-
-func (s *ComDomRepoSuite) TestCanRegisterAggregateFactory(c *C) {
-	aggregateFactory := NewDelegateAggregateFactory()
-
-	s.repo.SetAggregateFactory(aggregateFactory)
-
-	c.Assert(s.repo.aggregateFactory, Equals, aggregateFactory)
-}
-
-func (s *ComDomRepoSuite) TestNoAggregateFactoryReturnsErrorOnLoad(c *C) {
-	s.repo.aggregateFactory = nil
-	id := NewUUID()
-
-	agg, err := s.repo.Load(context.Background(), TypeOf(NewSomeAggregate(id)), id)
-
-	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, "the domain repository has no Aggregate Factory")
-	c.Assert(agg, IsNil)
-}
-
-func (s *ComDomRepoSuite) TestRepositoryReturnsAnErrorIfAggregateFactoryNotRegisteredForAnAggregate(c *C) {
-	aggregateFactory := NewDelegateAggregateFactory()
-	aggregateFactory.RegisterDelegate(&SomeOtherAggregate{}, func(id string) AggregateRoot { return NewSomeOtherAggregate(id) })
-	s.repo.SetAggregateFactory(aggregateFactory)
-
-	id := NewUUID()
-	aggregateTypeName := TypeOf(&SomeAggregate{})
-	agg, err := s.repo.Load(context.TODO(), aggregateTypeName, id)
-
-	c.Assert(err, DeepEquals,
-		fmt.Errorf("the repository has no aggregate factory registered for aggregate type: %s",
-			aggregateTypeName))
-	c.Assert(agg, IsNil)
-}
-
-func (s *ComDomRepoSuite) TestCanRegisterStreamNameDelegate(c *C) {
-	d := NewDelegateStreamNamer()
-
-	s.repo.SetStreamNameDelegate(d)
-
-	c.Assert(s.repo.streamNameDelegate, Equals, d)
-}
-
-func (s *ComDomRepoSuite) TestReturnsErrorOnLoadIfStreamNameDelegateNotRegisteredForAggregate(c *C) {
-	id := NewUUID()
-	streamNameDelegate := NewDelegateStreamNamer()
-	streamNameDelegate.RegisterDelegate(func(t string, id string) string { return "something" },
-		&SomeOtherAggregate{})
-	s.repo.SetStreamNameDelegate(streamNameDelegate)
-	typeName := TypeOf(&SomeAggregate{})
-
-	agg, err := s.repo.Load(context.TODO(), typeName, id)
-
-	c.Assert(agg, IsNil)
-	c.Assert(err, DeepEquals,
-		fmt.Errorf("there is no stream name delegate for aggregate of type \"%s\"",
-			typeName))
-}
-
-func (s *ComDomRepoSuite) TestStreamNameIsBuiltByStreamNameDelegateOnSave(c *C) {
-
-	id := NewUUID()
-	agg := NewSomeAggregate(id)
-	f := func(t string, id string) string { return "BoundedContext-" + id }
-	d := NewDelegateStreamNamer()
-	d.RegisterDelegate(f, agg)
-	s.repo.streamNameDelegate = d
-	ev := NewTestEventMessage(id)
-	agg.TrackChange(ev)
-
-	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, Equals, http.MethodPost)
-		streamName := f("", id)
-
-		c.Assert(r.URL.String(), DeepEquals, fmt.Sprintf("/streams/%s", streamName))
-	})
-
-	err := s.repo.Save(context.Background(), agg, nil)
-
-	c.Assert(err, IsNil)
-}
-
-func (s *ComDomRepoSuite) TestStreamNameIsBuiltByDelegateOnLoad(c *C) {
-	id := NewUUID()
-	agg := NewSomeAggregate(id)
-	f := func(t string, id string) string { return "xyz-" + id }
-	d := NewDelegateStreamNamer()
-	d.RegisterDelegate(f, agg)
-	s.repo.streamNameDelegate = d
-
-	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, Equals, http.MethodGet)
-		streamName := f("", id)
-		c.Assert(r.URL.String(), DeepEquals, fmt.Sprintf("/streams/%s/0/forward/20", streamName))
-	})
-
-	_, _ = s.repo.Load(context.Background(), TypeOf(agg), agg.AggregateID())
-
-}
-
-func (s *ComDomRepoSuite) TestReturnsErrorOnSaveIfStreamNameDelegateNotRegisteredForAnAggregate(c *C) {
-	streamNameDelegate := NewDelegateStreamNamer()
-	streamNameDelegate.RegisterDelegate(func(t string, id string) string { return "something" })
-	s.repo.SetStreamNameDelegate(streamNameDelegate)
-	agg := NewSomeAggregate(NewUUID())
-
-	err := s.repo.Save(context.Background(), agg, nil)
-
-	c.Assert(err, DeepEquals,
-		fmt.Errorf("there is no stream name delegate for aggregate of type \"%s\"",
-			TypeOf(agg)))
-}
-
-func (s *ComDomRepoSuite) TestReturnsErrorOnSaveIfStreamNameDelegateIsNil(c *C) {
-	s.repo.streamNameDelegate = nil
-	agg := NewSomeAggregate(NewUUID())
-
-	err := s.repo.Save(context.Background(), agg, nil)
-
-	c.Assert(err, NotNil)
-	c.Assert(err, DeepEquals, fmt.Errorf("the domain repository has no stream name delegate"))
 }
 
 func (s *ComDomRepoSuite) TestLoadReturnErrUnauthorized(c *C) {
@@ -342,7 +203,7 @@ func (s *ComDomRepoSuite) TestLoadReturnErrUnauthorized(c *C) {
 		fmt.Fprint(w, "")
 	})
 
-	_, err := s.repo.Load(context.Background(), TypeOf(agg), agg.AggregateID())
+	err := s.repo.Load(context.Background(), "SomeAggregate", agg)
 	c.Assert(err, NotNil)
 	c.Assert(err, FitsTypeOf, &ErrUnauthorized{})
 
@@ -358,7 +219,7 @@ func (s *ComDomRepoSuite) TestLoadReturnErrUnavailable(c *C) {
 		fmt.Fprint(w, "")
 	})
 
-	_, err := s.repo.Load(context.Background(), TypeOf(agg), agg.AggregateID())
+	err := s.repo.Load(context.Background(), "SomeAggregate", agg)
 	c.Assert(err, NotNil)
 	c.Assert(err, FitsTypeOf, &ErrRepositoryUnavailable{})
 
@@ -374,9 +235,10 @@ func (s *ComDomRepoSuite) TestSaveReturnErrUnauthorized(c *C) {
 
 	id := NewUUID()
 	agg := NewSomeAggregate(id)
-	agg.TrackChange(NewEventMessage(NewUUID(), &SomeEvent{"Some data", 4}, nil))
+	eventId := NewUUID()
+	agg.TrackChange(NewEventMessage(&eventId, &SomeEvent{"Some data", 4}, nil))
 
-	err := s.repo.Save(context.Background(), agg, nil)
+	err := s.repo.Save(context.Background(), "SomeAggregate", agg, nil)
 	c.Assert(err, NotNil)
 	c.Assert(err, FitsTypeOf, &ErrUnauthorized{})
 
@@ -392,30 +254,22 @@ func (s *ComDomRepoSuite) TestSaveReturnErrUnavailable(c *C) {
 
 	id := NewUUID()
 	agg := NewSomeAggregate(id)
-	agg.TrackChange(NewEventMessage(NewUUID(), &SomeEvent{"Some data", 4}, nil))
+	eventId := NewUUID()
+	agg.TrackChange(NewEventMessage(&eventId, &SomeEvent{"Some data", 4}, nil))
 
-	err := s.repo.Save(context.Background(), agg, nil)
+	err := s.repo.Save(context.Background(), "SomeAggregate", agg, nil)
 	c.Assert(err, NotNil)
 	c.Assert(err, FitsTypeOf, &ErrRepositoryUnavailable{})
 
 }
 
-func (s *ComDomRepoSuite) TestReturnsErrorOnLoadIfStreamNameDelegateIsNil(c *C) {
-	s.repo.streamNameDelegate = nil
-
-	_, err := s.repo.Load(context.TODO(), "", NewUUID())
-
-	c.Assert(err, NotNil)
-	c.Assert(err, DeepEquals, fmt.Errorf("the domain repository has no stream name delegate"))
-}
-
 func (s *ComDomRepoSuite) TestReturnsErrorOnLoadIfEventFactoryNotRegistered(c *C) {
 	s.repo.eventFactory = nil
 
-	agg, err := s.repo.Load(context.Background(), TypeOf(&SomeAggregate{}), NewUUID())
+	agg := NewSomeAggregate(NewUUID())
+	err := s.repo.Load(context.Background(), "SomeAggregate", agg)
 
 	c.Assert(err, DeepEquals, fmt.Errorf("the domain has no Event Factory"))
-	c.Assert(agg, IsNil)
 }
 
 func (s *ComDomRepoSuite) TestCanSetEventFactory(c *C) {
@@ -435,28 +289,11 @@ func (s *ComDomRepoSuite) TestAggregateNotFoundError(c *C) {
 	})
 
 	id := NewUUID()
-	agg, err := s.repo.Load(context.Background(), TypeOf(&SomeAggregate{}), id)
-	c.Assert(agg, IsNil)
+	agg := NewSomeAggregate(id)
+	err := s.repo.Load(context.Background(), "SomeAggregate", agg)
+
 	c.Assert(err, NotNil)
 	c.Assert(err, FitsTypeOf, &ErrAggregateNotFound{AggregateID: id, AggregateType: TypeOf(&SomeAggregate{})})
-}
-
-func (s *ComDomRepoSuite) TestSaveReturnsConncurrencyException(c *C) {
-
-	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, Equals, http.MethodPost)
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "")
-	})
-
-	id := NewUUID()
-	agg := NewSomeAggregate(id)
-	agg.TrackChange(NewEventMessage(NewUUID(), &SomeEvent{"Some data", 4}, nil))
-
-	err := s.repo.Save(context.Background(), agg, Int(-1))
-
-	streamName, _ := s.repo.streamNameDelegate.GetStreamName(TypeOf(agg), id)
-	c.Assert(err, DeepEquals, &ErrConcurrencyViolation{Aggregate: agg, ExpectedVersion: Int(-1), StreamName: streamName})
 }
 
 func (s *ComDomRepoSuite) TestSaveUnhandledErrors(c *C) {
@@ -469,9 +306,10 @@ func (s *ComDomRepoSuite) TestSaveUnhandledErrors(c *C) {
 
 	id := NewUUID()
 	agg := NewSomeAggregate(id)
-	agg.TrackChange(NewEventMessage(NewUUID(), &SomeEvent{"Some data", 4}, nil))
+	eventId := NewUUID()
+	agg.TrackChange(NewEventMessage(&eventId, &SomeEvent{"Some data", 4}, nil))
 
-	err := s.repo.Save(context.Background(), agg, nil)
+	err := s.repo.Save(context.Background(), "SomeAggregate", agg, nil)
 	c.Assert(err, NotNil)
 	c.Assert(err, FitsTypeOf, &ErrUnexpected{})
 
@@ -479,10 +317,12 @@ func (s *ComDomRepoSuite) TestSaveUnhandledErrors(c *C) {
 
 func (s *ComDomRepoSuite) TestNewEventsArePublishedOnSave(c *C) {
 	fakeHandler := &FakeEventHandler{}
-	s.eventBus.AddHandler(fakeHandler, &SomeEvent{}, &SomeOtherEvent{})
+	s.eventBus.AddHandler(fakeHandler, "SomeEvent", "SomeOtherEvent")
 
-	em1 := NewEventMessage(NewUUID(), &SomeEvent{"--------PUBLISH", 456}, nil)
-	em2 := NewEventMessage(NewUUID(), &SomeOtherEvent{"--------PUBLISH"}, nil)
+	eventId1 := NewUUID()
+	eventId2 := NewUUID()
+	em1 := NewEventMessage(&eventId1, &SomeEvent{"--------PUBLISH", 456}, nil)
+	em2 := NewEventMessage(&eventId2, &SomeOtherEvent{"--------PUBLISH"}, nil)
 
 	agg := NewSomeAggregate(NewUUID())
 	agg.TrackChange(em1)
@@ -494,7 +334,7 @@ func (s *ComDomRepoSuite) TestNewEventsArePublishedOnSave(c *C) {
 		fmt.Fprint(w, "")
 	})
 
-	err := s.repo.Save(context.Background(), agg, Int(agg.OriginalVersion()))
+	err := s.repo.Save(context.Background(), "SomeAggregate", agg, Int(agg.OriginalVersion()))
 	c.Assert(err, IsNil)
 
 	//spew.Dump(s.eventBus)
@@ -542,6 +382,6 @@ func (t *StubAggregate) Handle(command CommandMessage) error {
 	return nil
 }
 
-func (t *StubAggregate) Apply(event EventMessage, isNew bool) {
+func (t *StubAggregate) Apply(event EventMessage) {
 	t.events = append(t.events, event)
 }

@@ -21,6 +21,7 @@ import (
 // format such as JSON an instance of the event type will need to be created.
 type EventFactory interface {
 	GetEvent(string) Event
+	RegisterDelegate(eventName string, delegate func() Event) error
 }
 
 // DelegateEventFactory uses delegate functions to instantiate event instances

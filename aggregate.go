@@ -11,11 +11,12 @@ type AggregateRoot interface {
 	OriginalVersion() int
 	CurrentVersion() int
 	IncrementVersion()
-	Apply(event EventMessage, isNew bool)
+	Apply(event EventMessage)
 	TrackChange(EventMessage)
 	GetChanges() []EventMessage
 	ClearChanges()
 	RebuildFromEvents(events []EventMessage)
+	setVersion(version int)
 }
 
 // AggregateBase is a type that can be embedded in an AggregateRoot
@@ -85,4 +86,8 @@ func (a *AggregateBase) GetChanges() []EventMessage {
 //ClearChanges removes all unpersisted events from the aggregate.
 func (a *AggregateBase) ClearChanges() {
 	a.changes = []EventMessage{}
+}
+
+func (a *AggregateBase) setVersion(version int) {
+	a.version = version
 }

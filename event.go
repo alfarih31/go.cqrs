@@ -14,9 +14,10 @@ type Event interface {
 
 // EventMessage is the interface that a command must implement.
 type EventMessage interface {
+	setID(ID *string)
 
-	// AggregateID returns the ID of the Aggregate that the event relates to
-	AggregateID() string
+	// EventID returns the ID of the event
+	EventID() *string
 
 	// GetHeaders returns the key value collection of headers for the event.
 	//
@@ -59,24 +60,29 @@ func (r *RawEvent) Data() interface{} {
 
 // EventDescriptor is an implementation of the event message interface.
 type EventDescriptor struct {
-	id      string
+	id      *string
 	event   Event
 	headers map[string]interface{}
 	version *int
 }
 
 // NewEventMessage returns a new event descriptor
-func NewEventMessage(aggregateID string, event Event, version *int) *EventDescriptor {
+func NewEventMessage(eventID *string, event Event, version *int) *EventDescriptor {
 	return &EventDescriptor{
-		id:      aggregateID,
+		id:      eventID,
 		event:   event,
 		headers: make(map[string]interface{}),
 		version: version,
 	}
 }
 
-// AggregateID returns the ID of the Aggregate that the event relates to.
-func (c *EventDescriptor) AggregateID() string {
+// setID returns the ID of the Aggregate that the event relates to.
+func (c *EventDescriptor) setID(id *string) {
+	c.id = id
+}
+
+// EventID returns the ID of the Aggregate that the event relates to.
+func (c *EventDescriptor) EventID() *string {
 	return c.id
 }
 

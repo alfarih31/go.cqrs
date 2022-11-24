@@ -13,28 +13,14 @@ type SqlDomainRepo struct {
 	repo EventRepository
 }
 
-func (e *SqlDomainRepo) Load(ctx context.Context, aggregateTypeName, aggregateId string) (AggregateRoot, error) {
+func (e *SqlDomainRepo) Load(ctx context.Context, streamId string, aggregateRoot AggregateRoot) error {
 	if err := e.ValidateDependencies(); err != nil {
-		return nil, err
+		return err
 	}
 
-	// Get aggregate
-	aggregate := e.aggregateFactory.GetAggregate(aggregateTypeName, aggregateId)
-	if aggregate == nil {
-		return nil, &ErrAggregateNotFound{
-			AggregateID:   aggregateId,
-			AggregateType: aggregateTypeName,
-		}
-	}
-
-	streamName, err := e.streamNameDelegate.GetStreamName(aggregateTypeName, aggregateId)
+	msgs, err := e.repo.Read(ctx).Stream(streamId).Forward().ToList()
 	if err != nil {
-		return nil, err
-	}
-
-	msgs, err := e.repo.Read(ctx).Stream(streamName).Forward().ToList()
-	if err != nil {
-		return nil, err
+		return err
 	}
 
 	evs, err := transformer.ArrayTransformer[EventMessage, EventMessage](msgs, func(em EventMessage) (EventMessage, error) {
@@ -48,43 +34,27 @@ func (e *SqlDomainRepo) Load(ctx context.Context, aggregateTypeName, aggregateId
 		if err = event.Unmarshal(em.Event().Data().(string)); err != nil {
 			return nil, &ErrUnexpected{Err: err}
 		}
-		return NewEventMessage(em.AggregateID(), event, em.Version()), nil
+		return NewEventMessage(em.EventID(), event, em.Version()), nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if len(evs) == 0 {
-		return nil, &ErrRepositoryExecution{
-			Err: &ErrAggregateNotFound{
-				AggregateID:   aggregateId,
-				AggregateType: aggregateTypeName,
-			},
-		}
-	}
+	aggregateRoot.RebuildFromEvents(evs)
 
-	aggregate.RebuildFromEvents(evs)
-
-	return aggregate, nil
+	return nil
 }
 
-func (e *SqlDomainRepo) Save(ctx context.Context, aggregate AggregateRoot, expectedVersion *int) error {
-	if e.streamNameDelegate == nil {
-		return fmt.Errorf("the domain repository has no stream name delegate")
-	}
-
+func (e *SqlDomainRepo) Save(ctx context.Context, streamId string, aggregate AggregateRoot, expectedVersion *int) error {
 	changes := aggregate.GetChanges()
 
-	streamName, err := e.streamNameDelegate.GetStreamName(TypeOf(aggregate), aggregate.AggregateID())
+	err := e.repo.Append(ctx, streamId, changes, expectedVersion)
 	if err != nil {
 		return err
 	}
 
-	err = e.repo.Append(ctx, streamName, changes, expectedVersion)
-	if err != nil {
-		return err
-	}
-
+	// Set version to current version on saved
+	aggregate.setVersion(aggregate.CurrentVersion())
 	aggregate.ClearChanges()
 
 	for _, v := range changes {

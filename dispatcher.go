@@ -24,7 +24,7 @@ import (
 //Commands contained in a CommandMessage envelope are passed to the Dispatcher via
 //the dispatch method.
 type Dispatcher interface {
-	Dispatch(context.Context, CommandMessage) error
+	Dispatch(context.Context, CommandMessage) (any, error)
 	RegisterHandler(CommandHandler, ...interface{}) error
 }
 
@@ -42,11 +42,11 @@ func NewInMemoryDispatcher() *InMemoryDispatcher {
 }
 
 //Dispatch passes the CommandMessage on to all registered command handlers.
-func (b *InMemoryDispatcher) Dispatch(ctx context.Context, command CommandMessage) error {
+func (b *InMemoryDispatcher) Dispatch(ctx context.Context, command CommandMessage) (any, error) {
 	if handler, ok := b.handlers[command.CommandName()]; ok {
 		return handler.Handle(ctx, command)
 	}
-	return fmt.Errorf("The command bus does not have a handler for commands of type: %s", command.CommandName())
+	return nil, fmt.Errorf("The command bus does not have a handler for commands of type: %s", command.CommandName())
 }
 
 //RegisterHandler registers a command handler for the command types specified by the

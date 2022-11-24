@@ -34,7 +34,7 @@ func (s *InternalCommandBusSuite) TestShouldHandleCommand(c *C) {
 	c.Assert(err, IsNil)
 	cmd := NewSomeCommandMessage(NewUUID())
 
-	err = s.bus.Dispatch(context.TODO(), cmd)
+	_, err = s.bus.Dispatch(context.TODO(), cmd)
 
 	c.Assert(err, IsNil)
 	c.Assert(s.stubhandler.command, Equals, cmd)
@@ -43,7 +43,7 @@ func (s *InternalCommandBusSuite) TestShouldHandleCommand(c *C) {
 func (s *InternalCommandBusSuite) TestShouldReturnErrorIfNoHandlerRegisteredForCommand(c *C) {
 	cmd := NewSomeCommandMessage(NewUUID())
 
-	err := s.bus.Dispatch(context.TODO(), cmd)
+	_, err := s.bus.Dispatch(context.TODO(), cmd)
 
 	c.Assert(err, DeepEquals, fmt.Errorf("The command bus does not have a handler for commands of type: %s", cmd.CommandName()))
 	c.Assert(s.stubhandler.command, IsNil)

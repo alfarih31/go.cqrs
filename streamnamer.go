@@ -11,7 +11,7 @@ import (
 
 // StreamNamer is the interface that stream name delegates should implement.
 type StreamNamer interface {
-	GetStreamName(string, string) (string, error)
+	GetStreamName(aggregateTypeName string, aggregateId string) (string, error)
 }
 
 // DelegateStreamNamer stores delegates per aggregate type allowing fine grained

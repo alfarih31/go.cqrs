@@ -19,9 +19,9 @@ type TestCommandHandler struct {
 	command CommandMessage
 }
 
-func (t *TestCommandHandler) Handle(ctx context.Context, command CommandMessage) error {
+func (t *TestCommandHandler) Handle(ctx context.Context, command CommandMessage) (any, error) {
 	t.command = command
-	return nil
+	return nil, nil
 }
 
 type MockRepository struct {

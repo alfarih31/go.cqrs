@@ -10,7 +10,7 @@ import "context"
 // EventBus is the inteface that an event bus must implement.
 type EventBus interface {
 	PublishEvent(EventMessage)
-	AddHandler(EventHandler, ...Event)
+	AddHandler(EventHandler, ...string)
 }
 
 // InternalEventBus provides a lightweight in process event bus
@@ -39,11 +39,9 @@ func (b *InternalEventBus) PublishEvent(event EventMessage) {
 
 // AddHandler registers an event handler for all of the events specified in the
 // variadic events parameter.
-func (b *InternalEventBus) AddHandler(handler EventHandler, events ...Event) {
+func (b *InternalEventBus) AddHandler(handler EventHandler, events ...string) {
 
-	for _, event := range events {
-		eventName := event.Name()
-
+	for _, eventName := range events {
 		// There can be multiple handlers for any event.
 		// Here we check that a map is initialized to hold these handlers
 		// for a given type. If not we create one.

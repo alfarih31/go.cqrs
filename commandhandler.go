@@ -9,7 +9,7 @@ import "context"
 
 // CommandHandler is the interface that all command handlers should implement.
 type CommandHandler interface {
-	Handle(context.Context, CommandMessage) error
+	Handle(context.Context, CommandMessage) (any, error)
 }
 
 // CommandHandlerBase is an embedded type that supports chaining of command handlers

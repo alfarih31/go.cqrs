@@ -27,7 +27,7 @@ func (s *InternalEventBusSuite) Test_NewHandlerEventBus(c *C) {
 func (s *InternalEventBusSuite) TestEventBusPublishesEventsToHandlers(c *C) {
 	h := NewMockEventHandler()
 	ev := NewTestEventMessage(NewUUID())
-	s.bus.AddHandler(h, &SomeEvent{})
+	s.bus.AddHandler(h, "SomeEvent")
 
 	s.bus.PublishEvent(ev)
 
@@ -36,10 +36,10 @@ func (s *InternalEventBusSuite) TestEventBusPublishesEventsToHandlers(c *C) {
 
 func (s *InternalEventBusSuite) TestRegisterMultipleEventsForHandler(c *C) {
 	h := NewMockEventHandler()
-	ev1 := NewEventMessage(NewUUID(), &SomeEvent{Item: "Some Item", Count: 3456}, nil)
-	ev2 := NewEventMessage(NewUUID(), &SomeOtherEvent{OrderID: NewUUID()}, nil)
+	ev1 := NewEventMessage(nil, &SomeEvent{Item: "Some Item", Count: 3456}, nil)
+	ev2 := NewEventMessage(nil, &SomeOtherEvent{OrderID: NewUUID()}, nil)
 
-	s.bus.AddHandler(h, &SomeEvent{}, &SomeOtherEvent{})
+	s.bus.AddHandler(h, "SomeEvent", "SomeOtherEvent")
 
 	s.bus.PublishEvent(ev1)
 	s.bus.PublishEvent(ev2)

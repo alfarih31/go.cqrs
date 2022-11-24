@@ -41,7 +41,7 @@ type sqlEventRepositoryReader struct {
 }
 
 func (s *sqlEventRepositoryReader) buildEvent(m *model.EventStream) (EventMessage, error) {
-	return NewEventMessage(m.StreamID, &RawEvent{
+	return NewEventMessage(&m.Event.EventID, &RawEvent{
 		name: m.Event.EventName,
 		data: m.Event.EventData,
 	}, parser.Int(m.StreamVersion).ToIntPtr()), nil
@@ -306,12 +306,14 @@ func (s *sqlEventRepository) appendToStream(ctx context.Context, streamId string
 			CorrelationId: NewUUID(),
 		})
 
+		eventID := NewUUID()
 		evModels[i] = &model.EventStore{
-			EventID:   NewUUID(),
+			EventID:   eventID,
 			EventName: ev.Event().Name(),
 			EventData: ds,
 			Metadata:  parser.String(md).ToStringPtr(),
 		}
+		events[i].setID(&eventID)
 	}
 
 	err := s.db.GetQuery().Transaction(func(tx *models.Query) error {
